@@ -1,5 +1,4 @@
-﻿
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <meta charset="utf-8">
 <style>
@@ -139,6 +138,20 @@
     .dragging .resistances .supstance path {
     stroke: darkred;
     }
+        .takeprofits path {
+    stroke-dasharray: 2, 2;
+     stroke: darkgreen;
+    }
+    .takeprofits .interaction path {
+    pointer-events: all;
+    cursor: ns-resize;
+    }
+    .mouseover .takeprofits path {
+    stroke-width: 1.5;
+    }
+    .dragging .takeprofits .supstance path {
+    stroke: darkgreen;
+    }
     .crosshair {
     cursor: crosshair;
     }
@@ -167,6 +180,9 @@
     }
     .tradearrow path.highlight.sell {
     stroke: #9900FF;
+    }
+    .x.annotation path {
+        fill: #DDD80E;
     }
 </style>
 <body>
@@ -282,7 +298,9 @@
         var resistance = techan.plot.supstance()
             .xScale(x)
             .yScale(y);
-            
+        var takeprofit = techan.plot.supstance()
+            .xScale(x)
+            .yScale(y);            
     var brush = d3.brushX()
             .extent([[0, 0], [dim.width, dim.brush.height]])
             .on("end", brushed);
@@ -307,7 +325,7 @@
         var ohlcAnnotation = techan.plot.axisannotation()
             .axis(yAxis)
             .orient('right')
-            .format(d3.format(',.5f'))
+            .format(d3.format(',.6f'))
             .translate([x(1), 0]);
 
         var closeAnnotation = techan.plot.axisannotation()
@@ -403,7 +421,13 @@
             .verticalWireRange([0, dim.plot.height]);
 
 
-
+  var timeAnnotation = techan.plot.axisannotation()
+            .axis(xAxis)
+            .orient('bottom')
+            .accessor(candlestick.accessor().d)
+            .format(d3.timeFormat('%Y-%m-%d %H:%M'))
+            .width(80);
+            
         var svg = d3.select("body").append("svg")
             .attr("width", dim.width)
             .attr("height", dim.height);
@@ -506,6 +530,10 @@
             .attr("clip-path", function(d, i) {
                 return "url(#indicatorClip-" + i + ")";
             });
+            
+               svg.append("g")
+                .attr("class", "x annotation bottom")
+                .attr("transform", "translate(0," + dim.plot.height + ")");
 
         // Add trendlines and other interactions last to be above zoom pane
         svg.append('g')
@@ -530,7 +558,9 @@
             svg.append("g")
             .attr("class", "resistances analysis")
             .attr("clip-path", "url(#ohlcClip)");
-            
+                        svg.append("g")
+            .attr("class", "takeprofits analysis")
+            .attr("clip-path", "url(#ohlcClip)");
 
     var context = svg.append("g")
             .attr("class", "context")
@@ -585,21 +615,37 @@ init();
                 var accessor = candlestick.accessor(),
                     indicatorPreRoll = 33; // Don't show where indicators don't have data
                 var displayTicks = [];
-               
+               d3.select(".symbol").text(data["Symbol"]);
                 var values = data["Serie"];
                 var supstanceData = [];
                                 var resistanceData = [];
+                                var tpData = [];
                 if(data["supportPrice"])
-                	supstanceData[supstanceData.length] = {"start":new Date(parseInt(data["entryTime"]* 1000)),"end":new Date(parseInt(data["exitTime"]* 1000)),"value":data["supportPrice"]};
+                	supstanceData[supstanceData.length] = {"start":new Date(parseInt(data["setupTime"]* 1000)),"end":new Date(parseInt(data["expirationTime"]* 1000)),"value":data["supportPrice"]};
                 if(data["support2Price"])
-                	supstanceData[supstanceData.length] = {"start":new Date(parseInt(data["entryTime"]* 1000)),"end":new Date(parseInt(data["exitTime"]* 1000)),"value":data["support2Price"]};
+                	supstanceData[supstanceData.length] = {"start":new Date(parseInt(data["setupTime"]* 1000)),"end":new Date(parseInt(data["expirationTime"]* 1000)),"value":data["support2Price"]};
                 if(data["resistancePrice"])
-                	resistanceData[resistanceData.length] = {"start":new Date(parseInt(data["entryTime"]* 1000)),"end":new Date(parseInt(data["exitTime"]* 1000)),"value":data["resistancePrice"]};
+                	resistanceData[resistanceData.length] = {"start":new Date(parseInt(data["setupTime"]* 1000)),"end":new Date(parseInt(data["expirationTime"]* 1000)),"value":data["resistancePrice"]};
                 if(data["resistance2Price"])
-                	resistanceData[resistanceData.length] = {"start":new Date(parseInt(data["entryTime"]* 1000)),"end":new Date(parseInt(data["exitTime"]* 1000)),"value":data["resistance2Price"]};
+                	resistanceData[resistanceData.length] = {"start":new Date(parseInt(data["setupTime"]* 1000)),"end":new Date(parseInt(data["expirationTime"]* 1000)),"value":data["resistance2Price"]};
+                if(data["takeProfitPrice"])
+                	tpData[tpData.length] = {"start":new Date(parseInt(data["setupTime"]* 1000)),"end":new Date(parseInt(data["expirationTime"]* 1000)),"value":data["takeProfitPrice"]};
+                if(data["stopLossPrice"])
+                	tpData[tpData.length] = {"start":new Date(parseInt(data["setupTime"]* 1000)),"end":new Date(parseInt(data["expirationTime"]* 1000)),"value":data["stopLossPrice"]};
                 
                 var buys = [{"date":data["entryTime"],"price":data["entryPrice"]}];//data[instrumentname]["Series"]["buy"] ? data[instrumentname]["Series"]["buy"].Values : [];
                 var sells = [{"date":data["exitTime"],"price":data["exitPrice"]}];//data[instrumentname]["Series"]["sell"] ? data[instrumentname]["Series"]["sell"].Values : [];
+                var bottomData = [{"date":data["setupTime"],"open":data["setupPrice"],"high":data["setupPrice"],"low":data["setupPrice"],"close":data["setupPrice"],"volume":0}];//data[instrumentname]["Series"]["sell"] ? data[instrumentname]["Series"]["sell"].Values : [];
+                
+                var bottoms = buys.map(function(d, i) {
+                    return {
+                        date: new Date(parseInt(d.date * 1000)),
+                        price: d.price,
+                        low: d.price,
+                        high: d.price,
+                        type: "annotation"
+                    };
+                });
                 data = values.map(function(d, i) {
                     displayTicks.push(new Date(parseInt(d.x * 1000)));
                     return {
@@ -701,9 +747,10 @@ init();
                 // svg.select("g.trendlines").datum(trendlineData).call(trendline).call(trendline.drag);
                svg.select("g.supstances").datum(supstanceData).call(supstance).call(supstance.drag);
                svg.select("g.resistances").datum(resistanceData).call(resistance).call(resistance.drag);
+               svg.select("g.takeprofits").datum(tpData).call(resistance).call(takeprofit.drag);
 
                 svg.select("g.tradearrow").datum(trades).call(tradearrow);
-
+ svg.selectAll("g.x.annotation.bottom").datum(bottoms).call(timeAnnotation);
                 // Stash for zooming
                 zoomableInit = x.zoomable().domain([indicatorPreRoll, data.length]).copy(); // Zoom in a little to hide indicator preroll
                 yInit = y.copy();
